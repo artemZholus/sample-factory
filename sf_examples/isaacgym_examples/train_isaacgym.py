@@ -22,6 +22,7 @@ from sample_factory.envs.env_utils import register_env
 from sample_factory.train import run_rl
 from sample_factory.utils.typing import Config, Env
 from sample_factory.utils.utils import str2bool
+from sample_factory.utils.gpu_utils import get_available_gpus
 
 
 class IsaacGymVecEnv(gym.Env):
@@ -73,7 +74,7 @@ def make_isaacgym_env(full_env_name: str, cfg: Config, _env_config=None, render_
 
     import isaacgymenvs
     from hydra import compose, initialize
-
+    import hydra
     # this will register resolvers for the hydra config
     # noinspection PyUnresolvedReferences
     from isaacgymenvs import train
@@ -82,12 +83,23 @@ def make_isaacgym_env(full_env_name: str, cfg: Config, _env_config=None, render_
     cfg_dir = join(module_dir, "cfg")
     curr_file_dir = os.path.dirname(os.path.abspath(__file__))
     cfg_dir = os.path.relpath(cfg_dir, curr_file_dir)
+    if hydra.core.global_hydra.GlobalHydra.instance().is_initialized():
+        hydra.core.global_hydra.GlobalHydra.instance().clear()
     initialize(config_path=cfg_dir, job_name="sf_isaacgym")
     ige_cfg = compose(config_name="config", overrides=overrides)
 
-    rl_device = ige_cfg.rl_device
-    sim_device = ige_cfg.sim_device
-    graphics_device_id = ige_cfg.graphics_device_id
+    if _env_config is not None:
+        worker_id = _env_config['worker_index']
+        gpu_id = cfg.actor_worker_gpus[worker_id]
+        # gpu = get_available_gpus()[0]
+        print(f'<<<<---->>>> CHOOSING GPU {gpu_id}')
+        rl_device = f'cuda:{gpu_id}'
+        sim_device = f'cuda:{gpu_id}'
+        graphics_device_id = gpu_id
+    else:
+        rl_device = ige_cfg.rl_device
+        sim_device = ige_cfg.sim_device
+        graphics_device_id = ige_cfg.graphics_device_id
 
     ige_cfg_dict = omegaconf_to_dict(ige_cfg)
     task_cfg = ige_cfg_dict["task"]
@@ -181,6 +193,7 @@ def override_default_params_func(env, parser):
         adaptive_stddev=False,
         policy_initialization="torch_default",
         env_gpu_actions=True,
+        # env_gpu_observations=True,
         reward_scale=0.01,
         rollout=16,
         max_grad_norm=0.0,
@@ -307,6 +320,21 @@ env_configs = dict(
         max_grad_norm=1.0,
         num_batches_per_epoch=8,
     ),
+    FrankaCubeStack=dict(
+        train_for_env_steps=1_000_000_000,
+        encoder_mlp_layers=[256, 128, 64],
+        gamma=0.99,
+        rollout=32,
+        env_agents=8192,
+        batch_size=32768,
+        learning_rate=5e-4,
+        value_loss_coeff=4.0,
+        lr_schedule_kl_threshold=0.008,
+        reward_scale=1.0,
+        num_epochs=5,
+        max_grad_norm=1.0,
+        num_batches_per_epoch=8,
+    ),
     AllegroHandLSTM=dict(
         train_for_env_steps=10_000_000_000,
         encoder_mlp_layers=[512, 256, 128],
@@ -390,6 +418,7 @@ def parse_isaacgym_cfg(evaluation=False):
 
 def main():
     """Script entry point."""
+    print('-------------------------------- HERE')
     register_isaacgym_custom_components()
     cfg = parse_isaacgym_cfg()
     status = run_rl(cfg)

@@ -28,7 +28,7 @@ def get_available_gpus() -> List[int]:
     return available_gpus
 
 
-def gpus_for_process(process_idx: int, num_gpus_per_process: int, gpu_mask: Optional[List[int]] = None) -> List[int]:
+def gpus_for_process(process_idx: int, num_gpus_per_process: int, gpu_mask: Optional[List[int]] = None, process_type: Optional[str] = None) -> List[int]:
     """
     Returns indices of GPUs to use for a process. These indices already respect the CUDA_VISIBLE_DEVICES envvar.
     I.e. if CUDA_VISIBLE_DEVICES is '1,2,3', then from torch's there are three visible GPUs
@@ -54,7 +54,7 @@ def gpus_for_process(process_idx: int, num_gpus_per_process: int, gpu_mask: Opti
         gpus_to_use.append(index_mod_num_gpus)
 
     log.debug(
-        f"Using GPUs {gpus_to_use} for process {process_idx} (actually maps to GPUs {[available_gpus[g] for g in gpus_to_use]})"
+        f"Using GPUs {gpus_to_use} for process {process_idx} ({process_type}) (actually maps to GPUs {[available_gpus[g] for g in gpus_to_use]})"
     )
     return gpus_to_use
 
@@ -63,13 +63,15 @@ def set_gpus_for_process(process_idx, num_gpus_per_process, process_type, gpu_ma
     # in this function we want to limit the number of GPUs visible to the process, i.e. if
     # CUDA_VISIBLE_DEVICES is '1,2,3' and we want to use GPU index 2, then we want to set
     # CUDA_VISIBLE_DEVICES to '3' for this process
-    gpus_to_use = gpus_for_process(process_idx, num_gpus_per_process, gpu_mask)
+    gpus_to_use = gpus_for_process(process_idx, num_gpus_per_process, gpu_mask, process_type)
 
     if not gpus_to_use:
         os.environ[CUDA_ENVVAR] = ""
         log.debug("Not using GPUs for %s process %d", process_type, process_idx)
     else:
         available_gpus = get_available_gpus()
+        # TODO: 
+        # cuda_devices_to_use = ",".join([str(available_gpus[gpu_mask[g]]) for g in gpus_to_use])
         cuda_devices_to_use = ",".join([str(available_gpus[g]) for g in gpus_to_use])
         os.environ[CUDA_ENVVAR] = cuda_devices_to_use
         log.info(

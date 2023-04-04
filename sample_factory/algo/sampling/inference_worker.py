@@ -195,13 +195,18 @@ class InferenceWorker(HeartbeatStoppableEventLoopObject, Configurable):
         with timing.add_time("stack"):
             if len(rnn_states) == 1:
                 for obs_key, tensor_list in obs.items():
-                    obs[obs_key] = tensor_list[0]
-                rnn_states = rnn_states[0]
+                    obs[obs_key] = tensor_list[0].to(0)
+                rnn_states = rnn_states[0].to(0)
             else:
                 # cat() will fail if samples are on different devices
                 # should we handle a situation where experience comes from multiple devices?
                 # i.e. we use multiple GPUs for sampling but inference/learning is on a single GPU
+                for obs_key in obs:
+                    for j in range(len(obs[obs_key])):
+                        obs[obs_key][j] = obs[obs_key][j].to(0)
                 dict_of_lists_cat(obs)
+                for j in range(len(rnn_states)):
+                    rnn_states[j] = rnn_states[j].to(0)
                 rnn_states = cat_tensors(rnn_states)
 
         return obs, rnn_states
