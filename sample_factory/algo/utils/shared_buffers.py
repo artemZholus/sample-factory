@@ -19,17 +19,20 @@ from sample_factory.cfg.configurable import Configurable
 from sample_factory.model.model_utils import get_rnn_size
 from sample_factory.utils.attr_dict import AttrDict
 from sample_factory.utils.gpu_utils import gpus_for_process
-from sample_factory.utils.typing import Device, MpQueue, PolicyID
+from sample_factory.utils.typing import Device, MpQueue, PolicyID, Optional, List
 from sample_factory.utils.utils import log
 
 
-def policy_device(cfg: AttrDict, policy_id: PolicyID) -> torch.device:
+def policy_device(cfg: AttrDict, policy_id: PolicyID, gpu_mask: Optional[List[int]] = None) -> torch.device:
     """Inference/Learning device for the given policy."""
 
     if cfg.device == "cpu":
         return torch.device("cpu")
     else:
-        return torch.device("cuda", index=gpus_for_process(policy_id, 1)[0])
+        index = gpus_for_process(policy_id, 1)[0]
+        if gpu_mask is not None:
+            index = gpu_mask[index]
+        return torch.device("cuda", index=index)
 
 
 def init_tensor(leading_dimensions: List, tensor_type, tensor_shape, device: torch.device, share: bool) -> Tensor:

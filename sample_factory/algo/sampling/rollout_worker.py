@@ -64,14 +64,14 @@ def init_rollout_worker_process(sf_context: SampleFactoryContext, worker: Rollou
         psutil.Process().nice(min(cfg.default_niceness + 10, 20))
         torch.set_num_threads(1)
 
-    if cfg.actor_worker_gpus:
-        worker_gpus = set_gpus_for_process(
-            worker.worker_idx,
-            num_gpus_per_process=1,
-            process_type="actor",
-            gpu_mask=cfg.actor_worker_gpus,
-        )
-        assert len(worker_gpus) == 1
+    # if cfg.actor_worker_gpus:
+    #     worker_gpus = set_gpus_for_process(
+    #         worker.worker_idx,
+    #         num_gpus_per_process=1,
+    #         process_type="actor",
+    #         gpu_mask=cfg.actor_worker_gpus,
+    #     )
+    #     assert len(worker_gpus) == 1
 
     torch.multiprocessing.set_sharing_strategy("file_system")
 

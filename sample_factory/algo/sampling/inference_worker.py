@@ -58,8 +58,16 @@ def init_inference_process(sf_context: SampleFactoryContext, worker: InferenceWo
     except psutil.AccessDenied:
         log.error("Low niceness requires sudo!")
 
-    if cfg.device == "gpu":
-        cuda_envvars_for_policy(worker.policy_id, "inference")
+    # if cfg.device == "gpu":
+    #     cuda_envvars_for_policy(worker.policy_id, "inference")
+    # if cfg.actor_worker_gpus:
+    #     worker_gpus = set_gpus_for_process(
+    #         worker.worker_idx,
+    #         num_gpus_per_process=1,
+    #         process_type="actor",
+    #         gpu_mask=cfg.actor_worker_gpus,
+    #     )
+    #     assert len(worker_gpus) == 1
     init_torch_runtime(cfg)
 
 
@@ -90,7 +98,7 @@ class InferenceWorker(HeartbeatStoppableEventLoopObject, Configurable):
         self.traj_tensors: Dict[Device, TensorDict] = copy.copy(buffer_mgr.traj_tensors_torch)
         self.policy_output_tensors: Dict[Device, TensorDict] = copy.copy(buffer_mgr.policy_output_tensors_torch)
 
-        self.device: torch.device = policy_device(cfg, policy_id)
+        self.device: torch.device = policy_device(cfg, policy_id, gpu_mask=cfg.actor_worker_gpus)
         self.param_client = make_parameter_client(cfg.serial_mode, param_server, cfg, env_info, self.timing)
         self.inference_queue = inference_queue
 
@@ -152,7 +160,8 @@ class InferenceWorker(HeartbeatStoppableEventLoopObject, Configurable):
         state_dict = None
         policy_version = 0
         if init_model_data is not None:
-            policy_id, state_dict, self.device, policy_version = init_model_data
+            # don't load device from learner here
+            policy_id, state_dict, _, policy_version = init_model_data
             if policy_id != self.policy_id:
                 return
 
@@ -193,6 +202,8 @@ class InferenceWorker(HeartbeatStoppableEventLoopObject, Configurable):
                 rnn_states.append(traj_tensors["rnn_states"][traj_idx])
 
         with timing.add_time("stack"):
+            # TODO: here we need to get rid of .to(0) because we should have an inference worker for each 
+            # rollout worker sitting on the same gpu.
             if len(rnn_states) == 1:
                 for obs_key, tensor_list in obs.items():
                     obs[obs_key] = tensor_list[0].to(0)
